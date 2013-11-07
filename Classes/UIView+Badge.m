@@ -11,74 +11,153 @@
 static int MLT_BADGE_TAG = 6546;
 
 @implementation MLTBadgeView
-@synthesize placement, badgeValue, font, badgeColor, textColor, outlineColor, outlineWidth, minimumDiameter, displayWhenZero;
+
+@synthesize verticalAlign = _vertAlign;
+@synthesize horizontalAlign = _horAlign;
+@synthesize centerOffset = _centerOffset;
 
 -(void)dealloc {
-  self.font = nil;
-  self.badgeColor = nil;
-  self.textColor = nil;
-  self.outlineColor = nil;
-  [super dealloc];
+    self.font = nil;
+    self.badgeColor = nil;
+    self.textColor = nil;
+    self.outlineColor = nil;
 }
 
 -(id)initWithFrame:(CGRect)frame {
-  if(self = [super initWithFrame:frame]) {
-    self.font = [UIFont boldSystemFontOfSize:13.0];
-    self.badgeColor = [UIColor redColor];
-    self.textColor = [UIColor whiteColor];
-    self.outlineColor = [UIColor whiteColor];
-    self.outlineWidth = 2.0;
-    self.backgroundColor = [UIColor clearColor];
-    self.minimumDiameter = 20.0;
-    self.placement = kBadgePlacementUpperBest;
-    self.opaque = YES;
-  }
-  return self;
+    if(self = [super initWithFrame:frame]) {
+        self.font = [UIFont boldSystemFontOfSize:13.0];
+        self.badgeColor = [UIColor redColor];
+        self.textColor = [UIColor whiteColor];
+        self.outlineColor = [UIColor whiteColor];
+        self.outlineWidth = 2.0;
+        self.backgroundColor = [UIColor clearColor];
+        self.minimumDiameter = 20.0;
+        self.verticalAlign = MLTVerticalAlignmentCenter;
+        self.horizontalAlign = MLTHorizontalAlignmentLeft;
+        self.opaque = YES;
+    }
+    return self;
 }
--(void)setBadgeValue:(NSInteger)value {
-  if(value != 0 || self.displayWhenZero) {
-    CGSize numberSize = [[NSString stringWithFormat:@"%d", value] sizeWithFont:self.font];
-    float diameterForNumber = numberSize.width > numberSize.height ? numberSize.width : numberSize.height;
-    float diameter = diameterForNumber + 6 + (self.outlineWidth * 2);
-    if(diameter < self.minimumDiameter) {
-      diameter = self.minimumDiameter;
+
+- (void)setVertAlign:(MLTVerticalAlignment)verticalAlign {
+    _vertAlign = verticalAlign;
+    [self recalculatePositions];
+}
+
+- (void)setHorAlign:(MLTHorizontalAlignment)horizontalAlign {
+    _horAlign = horizontalAlign;
+    [self recalculatePositions];
+}
+
+- (void)setCenterOffset:(CGSize)margin {
+    _centerOffset = margin;
+    [self recalculatePositions];
+}
+
+- (void)recalculatePositions
+{
+    if(self.badgeValue != 0 || self.displayWhenZero) {
+        NSDictionary * attributes = @{
+                                      NSFontAttributeName : self.font
+                                      };
+        NSString * badgeValue = [NSString stringWithFormat:@"%d", self.badgeValue];
+        CGSize numberSize = [badgeValue sizeWithAttributes:attributes];
+        
+        float diameterForNumber = numberSize.width > numberSize.height ? numberSize.width : numberSize.height;
+        float diameter = diameterForNumber + 6 + (self.outlineWidth * 2);
+        if(diameter < self.minimumDiameter) {
+            diameter = self.minimumDiameter;
+        }
+        
+        //We know the size of the badge circle. If no explicit placement for the badge has been set, we'll
+        //see if it works on the right side first.
+        CGPoint center;
+        
+        CGFloat (*pHFunc)(CGRect);
+        CGFloat (*pVFunc)(CGRect);
+        
+        switch (self.horizontalAlign) {
+            case MLTHorizontalAlignmentCenter:
+                pHFunc = &CGRectGetMidX;
+                break;
+            case MLTHorizontalAlignmentLeft:
+                pHFunc = &CGRectGetMinX;
+                break;
+            case MLTHorizontalAlignmentRight:
+                pHFunc = &CGRectGetMaxX;
+                break;
+            default:
+                break;
+        }
+        
+        switch (self.verticalAlign) {
+            case MLTVerticalAlignmentBottom:
+                pVFunc = &CGRectGetMaxY;
+                break;
+            case MLTVerticalAlignmentCenter:
+                pVFunc = &CGRectGetMidY;
+                break;
+            case MLTVerticalAlignmentTop:
+                pVFunc = &CGRectGetMinY;
+                break;
+            default:
+                break;
+        }
+        
+        center.x = pHFunc(self.superview.bounds) + self.centerOffset.width;
+        center.y = pVFunc(self.superview.bounds) + self.centerOffset.height;
+        
+        self.bounds = CGRectMake(0, 0, diameter, diameter);
+        self.center = center;
+    } else {
+        self.frame = CGRectZero;
     }
     
-    //We know the size of the badge circle. If no explicit placement for the badge has been set, we'll
-    //see if it works on the right side first.
-    CGRect superviewFrame = self.superview.frame;
-    if(self.placement == kBadgePlacementUpperBest) {
-      CGPoint rightMostInWindow = [self.superview convertPoint:CGPointMake(superviewFrame.origin.x + superviewFrame.size.width + (diameter / 2.0), -(diameter / 2.0)) fromView:nil];
-      if(rightMostInWindow.x > [[UIScreen mainScreen] applicationFrame].size.width) {
-        self.placement = kBadgePlacementUpperLeft; 
-      } else {
-        self.placement = kBadgePlacementUpperRight;
-      }
-    }
-    self.bounds = CGRectMake(0, 0, diameter, diameter);
-    self.center = (self.placement == kBadgePlacementUpperLeft) ? CGPointMake(0, 0) : CGPointMake(superviewFrame.size.width, 0); 
-  } else {
-    self.frame = CGRectZero;
-  }
-  badgeValue = value;
-  [self setNeedsDisplay];
+    [self setNeedsDisplay];
 }
+
+- (void)setBadgeValue:(NSInteger)value {
+    _badgeValue = value;
+    [self recalculatePositions];
+    [self setNeedsDisplay];
+}
+
 -(void)setMinimumDiameter:(float)f {
-  minimumDiameter = f;
-  self.bounds = CGRectMake(0, 0, f, f); 
+    _minimumDiameter = f;
+    self.bounds = CGRectMake(0, 0, f, f);
 }
 
 -(void)drawRect:(CGRect)rect {
-  if(self.badgeValue != 0 || self.displayWhenZero) {
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    [self.outlineColor set];
-    CGContextFillEllipseInRect(context, CGRectInset(rect, 1, 1));
-    [self.badgeColor set];
-    CGContextFillEllipseInRect(context, CGRectInset(rect, self.outlineWidth + 1, self.outlineWidth + 1));
-    [self.textColor set];
-    CGSize numberSize = [[NSString stringWithFormat:@"%d", self.badgeValue] sizeWithFont:self.font];
-    [[NSString stringWithFormat:@"%d", self.badgeValue] drawInRect:CGRectMake(self.outlineWidth + 3, (rect.size.height / 2.0) - (numberSize.height / 2.0), rect.size.width - (self.outlineWidth * 2) - 6, numberSize.height) withFont:self.font lineBreakMode:UILineBreakModeClip alignment:UITextAlignmentCenter];
-  } 
+    if(self.badgeValue != 0 || self.displayWhenZero) {
+        
+        CGContextRef context = UIGraphicsGetCurrentContext();
+        [self.outlineColor set];
+        CGContextFillEllipseInRect(context, CGRectInset(rect, 1, 1));
+        [self.badgeColor set];
+        CGContextFillEllipseInRect(context, CGRectInset(rect, self.outlineWidth + 1, self.outlineWidth + 1));
+        [self.textColor set];
+        
+        NSDictionary * attributes = @{
+                                      NSFontAttributeName : self.font
+                                      };
+        NSString * badgeValue = [NSString stringWithFormat:@"%d", self.badgeValue];
+        CGSize numberSize = [badgeValue sizeWithAttributes:attributes];
+        
+        
+        CGRect drawableRect = CGRectMake(self.outlineWidth + 3, (rect.size.height / 2.0) - (numberSize.height / 2.0), rect.size.width - (self.outlineWidth * 2) - 6, numberSize.height);
+        
+        NSMutableParagraphStyle * paragraph = [NSMutableParagraphStyle new];
+        paragraph.lineBreakMode = NSLineBreakByClipping;
+        paragraph.alignment = NSTextAlignmentCenter;
+        
+        NSDictionary * drawRectAttributes = @{
+                                              NSFontAttributeName: self.font,
+                                              NSForegroundColorAttributeName : self.textColor,
+                                              NSParagraphStyleAttributeName : paragraph
+                                              };
+        
+        [badgeValue drawInRect:drawableRect withAttributes:drawRectAttributes];
+    }
 }
 
 @end
@@ -86,20 +165,21 @@ static int MLT_BADGE_TAG = 6546;
 
 @implementation UIView(Badged)
 
--(MLTBadgeView *)badge {
-  UIView *existingView = [self viewWithTag:MLT_BADGE_TAG];
-  if(existingView) {
-    if(![existingView isKindOfClass:[MLTBadgeView class]]) {
-      NSLog(@"Unexpected view of class %@ found with badge tag.");
-      return nil;
-    } else {
-      return (MLTBadgeView *)existingView;
+-(MLTBadgeView *)badge
+{
+    UIView *existingView = [self viewWithTag:MLT_BADGE_TAG];
+    if(existingView) {
+        if(![existingView isKindOfClass:[MLTBadgeView class]]) {
+            NSLog(@"Unexpected view of class %@ found with badge tag.", NSStringFromClass([existingView class]));
+            return nil;
+        } else {
+            return (MLTBadgeView *)existingView;
+        }
     }
-  }
-  MLTBadgeView *badgeView = [[MLTBadgeView alloc]initWithFrame:CGRectZero];
-  badgeView.tag = MLT_BADGE_TAG;
-  [self addSubview:badgeView];
-  return [badgeView autorelease];
+    MLTBadgeView *badgeView = [[MLTBadgeView alloc]initWithFrame:CGRectZero];
+    badgeView.tag = MLT_BADGE_TAG;
+    [self addSubview:badgeView];
+    return badgeView;
 }
 
 @end
